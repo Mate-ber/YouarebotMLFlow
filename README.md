@@ -66,23 +66,3 @@ docker compose up --build
 - MLflow UI:  http://localhost:5001  (host 5001 → container 5000, so it won't clash with a local MLflow on 5000)
 
 Requires the model file `models/qwen2.5-0.5b-instruct-q4_k_m.gguf` locally (large, not committed).
-
-### Test
-
-`/predict` — returns a bot probability in `[0, 1]`:
-
-```bash
-curl -s -X POST http://localhost:8090/predict \
-  -H "Content-Type: application/json" \
-  -d '{"text": "как я могу вам помочь?", "dialog_id": "11111111-1111-1111-1111-111111111111", "id": "22222222-2222-2222-2222-222222222222", "participant_index": 0}'
-```
-
-`/get_message` — returns a real answer from the LLM:
-
-```bash
-curl -s -X POST http://localhost:8090/get_message \
-  -H "Content-Type: application/json" \
-  -d '{"dialog_id": "11111111-1111-1111-1111-111111111111", "last_msg_text": "Привет! Как дела?", "last_message_id": "33333333-3333-3333-3333-333333333333"}'
-```
-
-No tokens or API keys are required or committed.
