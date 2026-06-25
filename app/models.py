@@ -45,7 +45,7 @@ class IncomingMessage(BaseModel):
     Input schema for a single message that needs to be saved
     and used for dialog classification.
     """
-    text: StrictStr
+    text: str | None = None
     dialog_id: UUID4
     id: UUID4
     participant_index: int

@@ -172,3 +172,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+models/*.gguf
+
+# local / IDE / secrets
+.idea/
+portforward_key

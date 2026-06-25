@@ -1,0 +1,84 @@
+services:
+  # ---- New microservice architecture (mlflow + classifier + orchestrator) ----
+
+  # MLflow tracking server + model registry
+  mlflow:
+    image: ghcr.io/mlflow/mlflow:v2.18.0
+    command: >
+      mlflow server
+      --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --artifacts-destination /mlflow/artifacts
+      --serve-artifacts
+    ports:
+      - "5001:5000"          # UI at http://localhost:5001 (5000 left free for your local MLflow)
+    volumes:
+      - mlflow_data:/mlflow
+
+  # Classifier: loads the champion model from MLflow, exposes POST /predict (internal only)
+  classifier:
+    build:
+      context: .
+      dockerfile: services/classifier/Dockerfile
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow:5000
+    depends_on:
+      - mlflow
+
+  # Orchestrator: public API gateway that only routes to the internal services
+  orchestrator:
+    build:
+      context: .
+      dockerfile: services/orchestrator/Dockerfile
+    ports:
+      - "8090:8000"          # public API at http://localhost:8090
+    environment:
+      - CLASSIFIER_URL=http://classifier:8000/predict
+      # llm listens on 8080 internally (llama.cpp default), see README
+      - LLM_URL=http://llm:8080/v1/chat/completions
+    depends_on:
+      - classifier
+      - llm
+
+  # ---- Existing services (unchanged) ----
+
+  llm:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/models
+    command: >
+      -m /models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+      --host 0.0.0.0
+      --port 8080
+      -c 512
+
+  fastapi:
+    image: python:3.11-slim
+    ports:
+      - "8001:8001"
+    volumes:
+      - .:/code
+    working_dir: /code
+    environment:
+      - LLM_URL=http://llm:8080/v1/chat/completions
+    command: >
+      sh -c "pip install --no-cache-dir fastapi uvicorn 'numpy<2.0.0' scipy joblib scikit-learn==1.5.2 sentence-transformers requests && uvicorn app.api.main:app --host 0.0.0.0 --port 8001"
+    depends_on:
+      - llm
+
+  streamlit:
+    image: python:3.11-slim
+    ports:
+      - "8501:8501"
+    volumes:
+      - .:/code
+    working_dir: /code
+    command: >
+      sh -c "pip install --no-cache-dir streamlit requests && streamlit run app/ui/streamlit_app.py --server.port 8501 --server.address 0.0.0.0"
+    depends_on:
+      - fastapi
+
+volumes:
+  mlflow_data:

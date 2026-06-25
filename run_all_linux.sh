@@ -55,20 +55,30 @@ poetry install
 echo "Dependencies installed successfully."
 
 
-# Starting SSH tunnel
-echo "Starting SSH tunnel..."
+# Starting SSH tunnel with keepalive + auto-reconnect (inline watchdog loop).
+# A plain `ssh -f` has no reconnect: if the link drops (idle timeout or the
+# remote host restarting) the platform can no longer reach the classifier and
+# the leaderboard shows total_responses=0. This loop re-dials whenever it dies.
+echo "Starting SSH tunnel (auto-reconnect)..."
 chmod 600 portforward_key
-ssh -f -i "$private_key" -N -R "0.0.0.0:$random_port:localhost:6872" "forwarduser@$remote_host"
-if [[ $? -eq 0 ]]; then
+( while true; do
+    pgrep -f "ssh.*-R 0.0.0.0:$random_port:localhost:6872" >/dev/null || \
+      ssh -i "$private_key" -N \
+        -o ServerAliveInterval=20 -o ServerAliveCountMax=3 \
+        -o ExitOnForwardFailure=yes -o StrictHostKeyChecking=no \
+        -R "0.0.0.0:$random_port:localhost:6872" "forwarduser@$remote_host"
+    sleep 10
+  done ) &
+sleep 3
+if pgrep -f "ssh.*-R 0.0.0.0:$random_port:localhost:6872" >/dev/null; then
   echo -e "${WHITE}SSH tunnel started successfully.${NC}"
 else
-  echo -e "${RED}Failed to start SSH tunnel.${NC}"
+  echo -e "${RED}Tunnel not up yet — it will keep retrying.${NC}"
 fi
 
 
-# Starting the app
 echo -e "${WHITE}Launching the app...${NC}"
-poetry run fastapi dev app/api/main.py --host 0.0.0.0 --port 6872 &
+poetry run fastapi run app/api/main.py --host 0.0.0.0 --port 6872 &
 
 # Starting the web-client (streamlit)
 PYTHONPATH=$(pwd) poetry run streamlit run app/web/streamlit_app.py --server.port=8502 --server.address=0.0.0.0

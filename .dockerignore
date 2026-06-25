@@ -1,0 +1,9 @@
+.venv
+.git
+.idea
+__pycache__
+*.pyc
+models/*.gguf
+mlflow_data
+portforward_key
+*.ipynb
